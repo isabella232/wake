@@ -181,6 +181,7 @@ int main(int argc, char **argv) {
     { 0,   "export-api",            GOPT_ARGUMENT_REQUIRED  },
     { 0,   "stdout",                GOPT_ARGUMENT_REQUIRED  },
     { 0,   "stderr",                GOPT_ARGUMENT_REQUIRED  },
+    { 0,   "clean",                 GOPT_ARGUMENT_FORBIDDEN },
     { 0,   "fd:3",                  GOPT_ARGUMENT_REQUIRED  },
     { 0,   "fd:4",                  GOPT_ARGUMENT_REQUIRED  },
     { 0,   "fd:5",                  GOPT_ARGUMENT_REQUIRED  },
@@ -220,6 +221,7 @@ int main(int argc, char **argv) {
   bool optim   =!arg(options, "no-optimize")->count;
   bool exports = arg(options, "exports")->count;
   bool timeline= arg(options, "timeline")->count;
+  bool clean   = arg(options, "clean")->count;
 
   const char *percent_str = arg(options, "percent")->argument;
   const char *jobs_str    = arg(options, "jobs")->argument;
@@ -379,6 +381,31 @@ int main(int argc, char **argv) {
   if (!fail.empty()) {
     std::cerr << "Failed to open wake.db: " << fail << std::endl;
     return 1;
+  }
+
+  // If the user asked us to clean the local build, do so.
+  if (clean) {
+    // Find all the file we need to delete and then close the database
+    auto files = db.get_outputs();
+    db.close();
+
+    // Delete all the files
+    for (const auto& file : files) {
+      if (unlink(file.c_str()) == -1) {
+        if (errno == EISDIR) continue;
+        if (errno == ENOENT) continue;
+        std::cerr << "error: unlink(" << file << "): " << strerror(errno) << std::endl;
+        return 1;
+      }
+    }
+
+    // Now delete the database
+    if (unlink("wake.db")) {
+      std::cerr << "error: unlink(wake.db): " << strerror(errno) << std::endl;
+      return 1;
+    }
+
+    return 0;
   }
 
   // seed the keyed hash function

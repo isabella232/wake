@@ -155,6 +155,9 @@ struct Database {
     const char *buffer,
     int size,
     double runtime);
+
+  std::vector<std::string> get_outputs() const;
+
   std::string get_output(
     long job,
     int descriptor) const;

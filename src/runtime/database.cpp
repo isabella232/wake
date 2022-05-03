@@ -82,6 +82,7 @@ struct Database::detail {
   sqlite3_stmt *get_edges;
   sqlite3_stmt *get_job_visualization;
   sqlite3_stmt *get_file_access;
+  sqlite3_stmt *get_output_files;
 
   long run_id;
   detail(bool debugdb_)
@@ -381,6 +382,12 @@ std::string Database::open(bool wait, bool memory, bool tty) {
     " from filetree"
     " where access != 1"
     " order by file_id, access desc, job_id";
+  const char *sql_get_output_files =
+    "select f.path"
+    " from filetree ft join files f on f.file_id=ft.file_id join jobs j on ft.job_id=j.job_id"
+    " where ft.access = 2"
+    " and substr(cast(j.commandline as varchar), 1, 8) != '<source>'"
+    " and substr(cast(j.commandline as varchar), 1, 7) != '<claim>'";
 
 
 #define PREPARE(sql, member)										\
@@ -430,6 +437,7 @@ std::string Database::open(bool wait, bool memory, bool tty) {
   PREPARE(sql_get_edges,      get_edges);
   PREPARE(sql_get_job_visualization, get_job_visualization);
   PREPARE(sql_get_file_access, get_file_access);
+  PREPARE(sql_get_output_files, get_output_files);
 
   return "";
 }
@@ -487,6 +495,7 @@ void Database::close() {
   FINALIZE(get_edges);
   FINALIZE(get_job_visualization);
   FINALIZE(get_file_access);
+  FINALIZE(get_output_files);
 
   close_db(imp.get());
 }
@@ -1089,6 +1098,20 @@ static std::vector<JobReflection> find_all(const Database *db, sqlite3_stmt *que
   db->end_txn();
 
   return out;
+}
+
+std::vector<std::string> Database::get_outputs() const {
+    const char *why = "Could not get outputs";
+    std::vector<std::string> out;
+
+    begin_txn();
+    while (sqlite3_step(imp->get_output_files) == SQLITE_ROW) {
+        out.emplace_back(rip_column(imp->get_output_files, 0));
+    }
+    finish_stmt(why, imp->get_output_files, imp->debugdb);
+    end_txn();
+
+    return out;
 }
 
 static std::vector<FileAccess> get_all_file_accesses(const Database *db, sqlite3_stmt *query) {
