@@ -8,7 +8,7 @@ jobs:
       image: ubuntu-2004:202201-02
     steps:
       - checkout
-      - run: gcc -I/usr/include/fuse -D_FILE_OFFSET_BITS=64 -E -dM test.cc | grep "FUSE.*VERSION"
+      - run: gcc $(pkg-config -cflags fuse) -E -dM test.cc | grep "FUSE.*VERSION"
       - run: sudo apt-get update && sudo apt-get install -y build-essential libfuse-dev libsqlite3-dev libgmp-dev libncurses5-dev pkg-config git g++ gcc libre2-dev python3-sphinx
       - run: make tarball
       - run: make test
