@@ -27,6 +27,7 @@
 #include <sstream>
 #include <random>
 #include <set>
+#include <algorithm>
 
 #include "gopt/gopt.h"
 #include "gopt/gopt-arg.h"
@@ -389,12 +390,32 @@ int main(int argc, char **argv) {
     auto files = db.get_outputs();
     db.close();
 
+    // Collect directories to be deleted
+    std::vector<std::string> dirs_to_remove;
+
     // Delete all the files
     for (const auto& file : files) {
       if (unlink(file.c_str()) == -1) {
-        if (errno == EISDIR) continue;
+        if (errno == EISDIR) {
+          dirs_to_remove.push_back(file);
+          continue;
+        }
         if (errno == ENOENT) continue;
         std::cerr << "error: unlink(" << file << "): " << strerror(errno) << std::endl;
+        return 1;
+      }
+    }
+
+    // Sort them so that child directories come before parent directories
+    std::sort(dirs_to_remove.begin(), dirs_to_remove.end(), [&](const std::string& a, const std::string& b) -> bool {
+      return a.size() > b.size();
+    });
+
+    // Now delete all empty directories
+    for (const auto& dir : dirs_to_remove) {
+      if (rmdir(dir.c_str()) == -1) {
+        if (errno == ENOTEMPTY) continue;
+        std::cerr << "error: rmdir(" << dir << "): " << strerror(errno) << std::endl;
         return 1;
       }
     }
